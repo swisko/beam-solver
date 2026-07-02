@@ -162,74 +162,82 @@ if st.button("🔍 Calculer", type="primary", use_container_width=True):
     else:
         try:
             res = resoudre(L, [(pos_A, type_A), (pos_B, type_B)], st.session_state.charges)
-            V, M = res["V"], res["M"]
-            reac_items = list(res["reactions"].items())
-
-            st.subheader("Réactions d'appuis")
-            if mode_symbolique:
-                st.latex(f"R_A = {sp.latex(sp.simplify(reac_items[0][1]))}")
-                st.latex(f"R_B = {sp.latex(sp.simplify(reac_items[1][1]))}")
-            else:
-                rc1, rc2 = st.columns(2)
-                with rc1:
-                    st.metric(f"Réaction en A (x={pos_A})", f"{abs(float(reac_items[0][1])):.2f} kN")
-                with rc2:
-                    st.metric(f"Réaction en B (x={pos_B})", f"{abs(float(reac_items[1][1])):.2f} kN")
-
-            if mode_symbolique:
-                st.subheader("Formules littérales")
-                st.write("Effort tranchant V(x) :")
-                st.latex(f"V(x) = {sp.latex(sp.simplify(V))}")
-                st.write("Moment fléchissant M(x) :")
-                st.latex(f"M(x) = {sp.latex(sp.simplify(M))}")
-
-                st.info("Donne des valeurs numériques aux symboles pour voir le diagramme :")
-                symboles = sorted(V.free_symbols.union(M.free_symbols).union(sp.sympify(L).free_symbols) - {x}, key=str)
-                valeurs_num = {}
-                if symboles:
-                    cols = st.columns(min(len(symboles), 4))
-                    for i, s in enumerate(symboles):
-                        with cols[i % len(cols)]:
-                            valeurs_num[s] = st.number_input(f"{s} =", value=1.0, key=f"num_{s}")
-
-                if st.button("📊 Afficher le diagramme symbolique"):
-                    L_num = float(sp.sympify(L).subs(valeurs_num))
-                    xs = np.linspace(0, L_num, 400)
-                    Vs, Ms = [], []
-                    for xv in xs:
-                        subs_dict = {**valeurs_num, x: xv}
-                        Vs.append(float(evaluer(V, subs_dict)))
-                        Ms.append(float(evaluer(M, subs_dict)))
-
-                    # Points caractéristiques : 0, appuis, positions de charges, L
-                    positions_sym = {sp.sympify(0), sp.sympify(pos_A), sp.sympify(pos_B), sp.sympify(L)}
-                    for c in st.session_state.charges:
-                        if c["type"] in ("ponctuelle", "moment"):
-                            positions_sym.add(sp.sympify(c["position"]))
-                        elif c["type"] == "repartie":
-                            positions_sym.add(sp.sympify(c["debut"]))
-                            positions_sym.add(sp.sympify(c["fin"]))
-
-                    points_symboliques = []
-                    for p_sym in positions_sym:
-                        try:
-                            xv_num = float(p_sym.subs(valeurs_num))
-                            if 0 <= xv_num <= L_num:
-                                points_symboliques.append((xv_num, p_sym, V, M))
-                        except Exception:
-                            continue
-                    points_symboliques.sort(key=lambda t: t[0])
-
-                    tracer_diagramme(xs, Vs, Ms, points_symboliques=points_symboliques)
-            else:
-                xs = np.linspace(0, float(L), 300)
-                Vs, Ms = [], []
-                for xv in xs:
-                    Vs.append(float(evaluer(V, {x: xv})))
-                    Ms.append(float(evaluer(M, {x: xv})))
-                Mmax_idx = max(range(len(Ms)), key=lambda i: abs(Ms[i]))
-                st.metric("Moment maximal |M|max", f"{abs(Ms[Mmax_idx]):.2f} kN·m", f"à x={xs[Mmax_idx]:.2f} m")
-                tracer_diagramme(xs, Vs, Ms)
-
+            st.session_state.resultat = {
+                "V": res["V"], "M": res["M"], "reactions": res["reactions"],
+                "L": L, "pos_A": pos_A, "pos_B": pos_B, "mode_symbolique": mode_symbolique,
+                "charges_snapshot": list(st.session_state.charges),
+            }
         except Exception as e:
+            st.session_state.resultat = None
             st.error(f"Erreur de calcul : {e}")
+
+if st.session_state.get("resultat"):
+    r = st.session_state.resultat
+    V, M = r["V"], r["M"]
+    reac_items = list(r["reactions"].items())
+    L, pos_A, pos_B = r["L"], r["pos_A"], r["pos_B"]
+
+    st.subheader("Réactions d'appuis")
+    if r["mode_symbolique"]:
+        st.latex(f"R_A = {sp.latex(sp.simplify(reac_items[0][1]))}")
+        st.latex(f"R_B = {sp.latex(sp.simplify(reac_items[1][1]))}")
+    else:
+        rc1, rc2 = st.columns(2)
+        with rc1:
+            st.metric(f"Réaction en A (x={pos_A})", f"{abs(float(reac_items[0][1])):.2f} kN")
+        with rc2:
+            st.metric(f"Réaction en B (x={pos_B})", f"{abs(float(reac_items[1][1])):.2f} kN")
+
+    if r["mode_symbolique"]:
+        st.subheader("Formules littérales")
+        st.write("Effort tranchant V(x) :")
+        st.latex(f"V(x) = {sp.latex(sp.simplify(V))}")
+        st.write("Moment fléchissant M(x) :")
+        st.latex(f"M(x) = {sp.latex(sp.simplify(M))}")
+
+        st.info("Donne des valeurs numériques aux symboles pour voir le diagramme :")
+        symboles = sorted(V.free_symbols.union(M.free_symbols).union(sp.sympify(L).free_symbols) - {x}, key=str)
+        valeurs_num = {}
+        if symboles:
+            cols = st.columns(min(len(symboles), 4))
+            for i, sym in enumerate(symboles):
+                with cols[i % len(cols)]:
+                    valeurs_num[sym] = st.number_input(f"{sym} =", value=1.0, key=f"num_{sym}")
+
+        if st.button("📊 Afficher le diagramme symbolique"):
+            L_num = float(sp.sympify(L).subs(valeurs_num))
+            xs = np.linspace(0, L_num, 400)
+            Vs, Ms = [], []
+            for xv in xs:
+                subs_dict = {**valeurs_num, x: xv}
+                Vs.append(float(evaluer(V, subs_dict)))
+                Ms.append(float(evaluer(M, subs_dict)))
+
+            positions_sym = {sp.sympify(0), sp.sympify(pos_A), sp.sympify(pos_B), sp.sympify(L)}
+            for c in r["charges_snapshot"]:
+                if c["type"] in ("ponctuelle", "moment"):
+                    positions_sym.add(sp.sympify(c["position"]))
+                elif c["type"] == "repartie":
+                    positions_sym.add(sp.sympify(c["debut"]))
+                    positions_sym.add(sp.sympify(c["fin"]))
+
+            points_symboliques = []
+            for p_sym in positions_sym:
+                try:
+                    xv_num = float(p_sym.subs(valeurs_num))
+                    if 0 <= xv_num <= L_num:
+                        points_symboliques.append((xv_num, p_sym, V, M))
+                except Exception:
+                    continue
+            points_symboliques.sort(key=lambda t: t[0])
+
+            tracer_diagramme(xs, Vs, Ms, points_symboliques=points_symboliques)
+    else:
+        xs = np.linspace(0, float(L), 300)
+        Vs, Ms = [], []
+        for xv in xs:
+            Vs.append(float(evaluer(V, {x: xv})))
+            Ms.append(float(evaluer(M, {x: xv})))
+        Mmax_idx = max(range(len(Ms)), key=lambda i: abs(Ms[i]))
+        st.metric("Moment maximal |M|max", f"{abs(Ms[Mmax_idx]):.2f} kN·m", f"à x={xs[Mmax_idx]:.2f} m")
+        tracer_diagramme(xs, Vs, Ms)
