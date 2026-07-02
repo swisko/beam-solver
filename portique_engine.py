@@ -140,7 +140,7 @@ def _construire_segments(waypoints, reactions_numeriques, charges):
 
             N = -(Fx_cum * direction[0] + Fy_cum * direction[1])
             V = -(Fx_cum * normale[0] + Fy_cum * normale[1])
-            M = M_cum
+            M = -M_cum  # convention alignée sur beam_engine (EPFL) : M>0 = fibre opposée à la normale tendue
             return N, V, M
 
         segments.append({"p0": tuple(p0), "p1": tuple(p1), "L": L,
