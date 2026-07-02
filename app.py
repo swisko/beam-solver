@@ -52,7 +52,6 @@ def tracer_diagramme(xs, Vs, Ms, points_symboliques=None):
             xticks.append(xv)
             xticklabels.append(f"${sp.latex(label_x)}$" if label_x is not None else f"{xv:.2g}")
 
-            Vv = float(V_expr.subs(x, label_x)) if V_expr is not None else None
             v_num = np.interp(xv, xs, Vs)
             ax1.plot([xv], [v_num], "o", color="#1e3a8a", markersize=4)
             if V_expr is not None:
