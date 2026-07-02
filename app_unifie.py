@@ -9,6 +9,29 @@ from portique_engine import resoudre_portique, resoudre_portique_multi
 
 x = sp.Symbol('x')
 
+
+def _ajouter_signes(ax, xs, ys, taille=11):
+    """Place un ⊕ ou ⊖ au centre de chaque zone de signe constant sur la courbe (comme dans les corrigés)."""
+    xs = np.asarray(xs, dtype=float)
+    ys = np.asarray(ys, dtype=float)
+    if len(xs) < 2:
+        return
+    signes = np.sign(np.round(ys, 9))
+    debut = 0
+    for i in range(1, len(xs) + 1):
+        if i == len(xs) or (signes[i] != signes[debut] and signes[i] != 0 and signes[debut] != 0):
+            fin = i
+            seg_signe = signes[debut] if signes[debut] != 0 else (signes[fin - 1] if fin - 1 < len(signes) else 0)
+            if seg_signe != 0 and fin > debut + 1:
+                i_centre = (debut + fin - 1) // 2
+                xc, yc = xs[i_centre], ys[i_centre]
+                symbole = "⊕" if seg_signe > 0 else "⊖"
+                couleur = "#166534" if seg_signe > 0 else "#991b1b"
+                decalage = 14 if seg_signe > 0 else -14
+                ax.annotate(symbole, (xc, yc), textcoords="offset points", xytext=(0, decalage),
+                            fontsize=taille, ha="center", color=couleur, fontweight="bold")
+            debut = i if i < len(xs) else debut
+
 st.set_page_config(page_title="StatiqueSolver", page_icon="📐", layout="wide")
 st.title("📐 StatiqueSolver")
 
@@ -38,14 +61,16 @@ with tab_poutre:
         ax1.set_ylabel("V(x)")
         ax1.set_title("Effort tranchant")
         ax1.grid(alpha=0.3)
+        _ajouter_signes(ax1, xs, Vs)
 
         ax2.plot(xs, Ms, color="#dc2626", linewidth=2)
         ax2.axhline(0, color="black", linewidth=0.8)
         ax2.fill_between(xs, Ms, 0, alpha=0.2, color="#dc2626")
         ax2.set_ylabel("M(x)")
         ax2.set_xlabel("x")
-        ax2.set_title("Moment fléchissant")
+        ax2.set_title("Moment fléchissant  (convention : M > 0 ⇒ fibre inférieure tendue)")
         ax2.grid(alpha=0.3)
+        _ajouter_signes(ax2, xs, Ms)
 
         if points_symboliques:
             xticks, xticklabels = [], []
@@ -409,6 +434,7 @@ with tab_portique:
             fig, axes = plt.subplots(1, 3, figsize=(15, 3.5))
             offset = 0
             xticks = []
+            xs_tous, Ns_tous, Vs_tous, Ms_tous = [], [], [], []
             for seg in fres["segments"]:
                 svals = np.linspace(0, seg["L"], 60)
                 Ns, Vs, Ms = [], [], []
@@ -424,15 +450,29 @@ with tab_portique:
                 axes[1].fill_between(xs_plot, Vs, 0, alpha=0.15, color="#2563eb")
                 axes[2].plot(xs_plot, Ms, color="#dc2626")
                 axes[2].fill_between(xs_plot, Ms, 0, alpha=0.15, color="#dc2626")
+                xs_tous.extend(xs_plot)
+                Ns_tous.extend(Ns)
+                Vs_tous.extend(Vs)
+                Ms_tous.extend(Ms)
                 offset += seg["L"]
                 xticks.append(offset)
 
-            for ax, titre in zip(axes, ["N [effort normal]", "V [effort tranchant]", "M [moment]"]):
-                ax.axhline(0, color="black", linewidth=0.8)
-                ax.set_title(titre)
-                ax.grid(alpha=0.3)
+            axes[0].axhline(0, color="black", linewidth=0.8)
+            axes[0].set_title("N [effort normal]")
+            axes[0].grid(alpha=0.3)
+            axes[1].axhline(0, color="black", linewidth=0.8)
+            axes[1].set_title("V [effort tranchant]")
+            axes[1].grid(alpha=0.3)
+            axes[2].axhline(0, color="black", linewidth=0.8)
+            axes[2].set_title("M [moment]  (M > 0 ⇒ fibre inférieure/intérieure tendue)")
+            axes[2].grid(alpha=0.3)
+            for ax in axes:
                 for xt in xticks:
                     ax.axvline(xt, color="gray", linewidth=0.5, linestyle="--")
+
+            _ajouter_signes(axes[0], xs_tous, Ns_tous, taille=9)
+            _ajouter_signes(axes[1], xs_tous, Vs_tous, taille=9)
+            _ajouter_signes(axes[2], xs_tous, Ms_tous, taille=9)
 
             plt.tight_layout()
             st.pyplot(fig)
